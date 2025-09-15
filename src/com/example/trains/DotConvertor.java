@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import static java.lang.Double.parseDouble;
 import static java.lang.Integer.parseInt;
@@ -19,6 +18,10 @@ public class DotConvertor {
      * Maximum accepted number of vertices
      */
     private static final int MAX_VERTICES_NUMBER = 64;
+    private String[] lines;
+    private int sourceIndex;
+    private int targetIndex;
+    private double weight;
 
     /**
      * Convert a file with the name {@code sourceFilename} to dot format.
@@ -31,43 +34,43 @@ public class DotConvertor {
         // Open target file for writing
         try (PrintStream output = new PrintStream(targetFilename)) {
             // Read all source file lines
-            List<String> lines = readLines(sourceFilename);
+            readLines(sourceFilename);
             // Process the read lines
-            processLines(lines, output);
+            processLines(output);
         } catch (IOException e) {
             // catch and wrap checked exceptions
             throw new RuntimeException(e);
         }
     }
 
-    private void processLines(List<String> lines, PrintStream output) {
+    private void processLines(PrintStream output) {
         // Vertices array, initially empty (all nulls)
         String[] vertices = new String[MAX_VERTICES_NUMBER];
         // Current index
         int index = 0;
         // Which part of the file is being read, start with vertices
-        FilePart part = FilePart.VERTICES;
+        int filePart = 1;
         // Print out dot file header
         output.printf("digraph {%n");
         // For each line in the source file
-        for (String line : lines) {
+        for (String line : this.lines) {
             if (line.isBlank()) {
                 // a blank line delimits the vertices part
-                part = FilePart.EDGES;
-            } else if (part == FilePart.VERTICES) {
+                filePart = 2;
+            } else if (filePart == 1) {
                 // While still reading vertices, add a vertex to the array
                 vertices[index++] = line;
             } else {
                 // if all vertices are read, analyse edge line
-                EdgeData edgeData = readEdgeData(line);
-                String source = vertices[edgeData.sourceIndex()];
-                String target = vertices[edgeData.targetIndex()];
+                readEdgeData(line);
+                String source = vertices[this.sourceIndex];
+                String target = vertices[this.targetIndex];
                 // print out the directed edge line
                 output.printf(
                         "\"%s\" -> \"%s\" [label=%.2f arrowhead=normal]%n",
                         source,
                         target,
-                        edgeData.weight()
+                        this.weight
                 );
             }
         }
@@ -79,22 +82,21 @@ public class DotConvertor {
      * Read all text lines of a file.
      *
      * @param filename the filename.
-     * @return  a list of all text line within the file.
      */
-    private List<String> readLines(String filename) throws IOException {
+    private void readLines(String filename) throws IOException {
         // Path to source file
         Path path = Path.of(filename);
         // Read all file lines at once
-        return Files.readAllLines(path);
+        String content = Files.readString(path);
+        this.lines = content.split("\n");
     }
 
     /**
      * Read edge data out of comma-seperated line.
      *
      * @param line comma-seperated line
-     * @return  edge data object.
      */
-    private EdgeData readEdgeData(String line) {
+    private void readEdgeData(String line) {
         // Analyse the line to extract 3 comma-separated elements
         String[] params = line.split(",");
         if (params.length < 3) {
@@ -102,11 +104,10 @@ public class DotConvertor {
             throw new RuntimeException("Illegible line %s".formatted(line));
         }
         // first element is source index
-        int sourceIndex = parseInt(params[0].trim());
+        this.sourceIndex = parseInt(params[0].trim());
         // second element is target index
-        int targetIndex = parseInt(params[1].trim());
+        this.targetIndex = parseInt(params[1].trim());
         // third element is weight
-        double weight = parseDouble(params[2].trim());
-        return new EdgeData(sourceIndex, targetIndex, weight);
+        this.weight = parseDouble(params[2].trim());
     }
 }
